@@ -3,124 +3,7 @@
 #include <NimBLEScan.h>
 #include <NimBLEUtils.h>
 
-
-/**
- *@brief motorSpeeddetectionbyPH_EN.ino
- *@ Motor driver in PH/EN mode
- */
-#include "driver/mcpwm.h"
-#include "soc/mcpwm_struct.h"
-#include "soc/mcpwm_reg.h"
-
-//IO12->M1_IN1
-//IO13->M1_IN2
-#define MOTOR_STEP_PIN 12
-#define MOTOR_DIRECTION_PIN 13
-
-//Initialize the pins needed to generate the PWM signal
-void mcpwm_init(void)
-{
-/**
- * @brief This function initializes each gpio signal for MCPWM
- *        @note
- *        This function initializes one gpio at a time.
- *
- * @param mcpwm_num set MCPWM unit(0-1)
- * @param io_signal set MCPWM signals, each MCPWM unit has 6 output(MCPWMXA, MCPWMXB) and 9 input(SYNC_X, FAULT_X, CAP_X)
- *                  'X' is timer_num(0-2)
- * @param gpio_num set this to configure gpio for MCPWM, if you want to use gpio16, gpio_num = 16
- *
- * @return
- *     - ESP_OK Success
- *     - ESP_ERR_INVALID_ARG Parameter error
- */
-  mcpwm_gpio_init(MCPWM_UNIT_0,MCPWM0A,MOTOR_STEP_PIN);//The binding needs to output the PWM pin to the PWM channel
-  mcpwm_gpio_init(MCPWM_UNIT_0,MCPWM0B,MOTOR_DIRECTION_PIN);
-
-  //Configure mcpwm information
-  mcpwm_config_t pwm_config;
-  pwm_config.frequency = 1000;/*!<Set frequency of MCPWM in Hz*/
-  pwm_config.cmpr_a = 0;/*!<Set % duty cycle for operator a(MCPWMXA), i.e for 62.3% duty cycle, duty_a = 62.3*/
-  pwm_config.cmpr_b = 0;/*!<Set % duty cycle for operator b(MCPWMXB), i.e for 48% duty cycle, duty_b = 48.0*/
-  pwm_config.counter_mode/*!<Set  type of MCPWM counter*/ = MCPWM_UP_COUNTER/*!<For asymmetric MCPWM*/;
-  pwm_config.duty_mode/*!<Set type of duty cycle*/ = MCPWM_DUTY_MODE_0/*!<Active high duty, i.e. duty cycle proportional to high time for asymmetric MCPWM*/;
-
-/**
- * @brief Initialize MCPWM parameters
- *
- * @param mcpwm_num set MCPWM unit(0-1)
- * @param timer_num set timer number(0-2) of MCPWM, each MCPWM unit has 3 timers.
- * @param mcpwm_conf configure structure mcpwm_config_t
- *
- * @return
- *     - ESP_OK Success
- *     - ESP_ERR_INVALID_ARG Parameter error
- */
-  mcpwm_init(MCPWM_UNIT_0,MCPWM_TIMER_0,&pwm_config);//Initializes one of the mcpwm units and binds the clock
-}
-
-void advance(/*range：0~100*/uint8_t speed)
-{
-  Serial.printf("advance: %d\n", speed);
-
-/**
- * @brief Use this function to set MCPWM signal high
- *
- * @param mcpwm_num set MCPWM unit(0-1)
- * @param timer_num set timer number(0-2) of MCPWM, each MCPWM unit has 3 timers
- * @param gen set the operator(MCPWMXA/MCPWMXB), 'x' is timer number selected
- * @return
- *     - ESP_OK Success
- *     - ESP_ERR_INVALID_ARG Parameter error
- */
-  mcpwm_set_signal_high(MCPWM_UNIT_0,MCPWM_TIMER_0,MCPWM_GEN_B);//Give MOTOR_STEP_PIN a continuous high level
-
-/**
- * @brief Set duty either active high or active low(out of phase/inverted)
- *        @note
- *        Call this function every time after mcpwm_set_signal_high or mcpwm_set_signal_low to resume with previously set duty cycle
- *
- * @param mcpwm_num set MCPWM unit(0-1)
- * @param timer_num set timer number(0-2) of MCPWM, each MCPWM unit has 3 timers
- * @param gen set the generator(MCPWMXA/MCPWMXB), 'x' is operator number selected
- * @param duty_type set active low or active high duty type
- *
- * @return
- *     - ESP_OK Success
- *     - ESP_ERR_INVALID_ARG Parameter error
- */
-  mcpwm_set_duty_type(MCPWM_UNIT_0,MCPWM_TIMER_0,MCPWM_GEN_A,MCPWM_DUTY_MODE_0);
-
-/**
- * @brief Set duty cycle of each operator(MCPWMXA/MCPWMXB)
- *
- * @param mcpwm_num set MCPWM unit(0-1)
- * @param timer_num set timer number(0-2) of MCPWM, each MCPWM unit has 3 timers
- * @param gen set the generator(MCPWMXA/MCPWMXB), 'X' is operator number selected
- * @param duty set duty cycle in %(i.e for 62.3% duty cycle, duty = 62.3) of each operator
- *
- * @return
- *     - ESP_OK Success
- *     - ESP_ERR_INVALID_ARG Parameter error
- */
-  mcpwm_set_duty(MCPWM_UNIT_0,MCPWM_TIMER_0,MCPWM_GEN_A,speed);//The MOTOR_DIRECTION_PIN pin outputs a PWM wave with a duty cycle of "speed"
-}
-
-void retreat(/*range：0~100*/uint8_t speed)
-{
-  //Give MOTOR_STEP_PIN a continuous low level
-  mcpwm_set_signal_low(MCPWM_UNIT_0,MCPWM_TIMER_0,MCPWM_GEN_B);
-
-  //The MOTOR_DIRECTION_PIN pin outputs a PWM wave with a duty cycle of "speed"
-  mcpwm_set_duty_type(MCPWM_UNIT_0,MCPWM_TIMER_0,MCPWM_GEN_A,MCPWM_DUTY_MODE_0);
-  mcpwm_set_duty(MCPWM_UNIT_0,MCPWM_TIMER_0,MCPWM_GEN_A,speed);
-}
-
-void breake(void)
-{
-  Serial.printf("break\n");
-  mcpwm_set_signal_low(MCPWM_UNIT_0,MCPWM_TIMER_0,MCPWM_GEN_A);
-}
+#include "motors.h"
 
 
 // LWP3 Service UUID (00001623-1212-EFDE-1623-785FEABCD123)
@@ -188,12 +71,21 @@ void notifyCallback(NimBLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_
             if (pData[3] == 0x00) { // Left Buttons -> Maps to Port A on Train Hub
                 Serial.printf("Left Buttons (Port A): %02X %02X %02X\n", pData[4], pData[5], pData[6]);
                 if (pData[4] == 1) {
-                    advance(70);
+                    moveCar(UP, 70);
+                } else if (pData[6] == 1) {
+                    moveCar(DOWN, 70);
                 } else {
-                    breake();
+                    moveCar(STOP, 0);
                 }
             } else if (pData[3] == 0x01) { // Right Buttons -> Maps to Port B on Train Hub
                 Serial.printf("Right Buttons (Port B): %02X %02X %02X\n", pData[4], pData[5], pData[6]);
+                if (pData[4] == 1) {
+                    moveCar(LEFT, 70);
+                } else if (pData[6] == 1) {
+                    moveCar(RIGHT, 70);
+                } else {
+                    moveCar(STOP, 0);
+                }
             }
         }
     }
