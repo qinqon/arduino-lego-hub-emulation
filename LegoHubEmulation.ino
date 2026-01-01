@@ -30,6 +30,11 @@ static NimBLEAdvertisedDevice* pDevice = nullptr;
 bool deviceConnected = false;
 bool doConnect = false;
 
+uint8_t speed = 70;
+uint8_t max_speed = 100;
+uint8_t min_speed = 5;
+uint8_t speed_interval = 10;
+
 // Scan for BLE servers and connect to the first matching one
 class AdvertisedDeviceCallbacks : public NimBLEScanCallbacks {
     void onResult(const NimBLEAdvertisedDevice* advertisedDevice) override {
@@ -63,6 +68,22 @@ class AdvertisedDeviceCallbacks : public NimBLEScanCallbacks {
     }
 };
 
+void decreaseSpeed() {
+  if (speed - speed_interval > min_speed) {
+    speed -= speed_interval;
+  } else {
+    speed = min_speed;
+  }
+}
+
+void increasSpeed() {
+  if (speed + speed_interval < max_speed) {
+    speed += speed_interval;
+  } else {
+    speed = max_speed;
+  }
+}
+
 // Callback for characteristic notifications
 void notifyCallback(NimBLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify) {
     if (isNotify) {
@@ -71,20 +92,26 @@ void notifyCallback(NimBLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_
             if (pData[3] == 0x00) { // Left Buttons -> Maps to Port A on Train Hub
                 Serial.printf("Left Buttons (Port A): %02X %02X %02X\n", pData[4], pData[5], pData[6]);
                 if (pData[4] == 1) {
-                    moveCar(UP, 70);
+                    moveCar(UP, speed);
                 } else if (pData[6] == 1) {
-                    moveCar(DOWN, 70);
+                    moveCar(DOWN, speed);
                 } else {
                     moveCar(STOP, 0);
+                }
+                if (pData[5] == 1) {
+                  increasSpeed();
                 }
             } else if (pData[3] == 0x01) { // Right Buttons -> Maps to Port B on Train Hub
                 Serial.printf("Right Buttons (Port B): %02X %02X %02X\n", pData[4], pData[5], pData[6]);
                 if (pData[4] == 1) {
-                    moveCar(LEFT, 70);
+                    moveCar(LEFT, speed);
                 } else if (pData[6] == 1) {
-                    moveCar(RIGHT, 70);
+                    moveCar(RIGHT, speed);
                 } else {
                     moveCar(STOP, 0);
+                }
+                if (pData[5] == 1) {
+                  decreaseSpeed();
                 }
             }
         }
